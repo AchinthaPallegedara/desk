@@ -64,9 +64,13 @@ type RenderItem struct {
 	Description string `json:"description"`
 	Quantity    string `json:"quantity"`
 	UnitPrice   string `json:"unit_price"`
-	Discount    string `json:"discount"` // "10%" / "5,000.00" / ""
+	Discount    string `json:"discount"` // "10% (−20,000.00)" / "−5,000.00" / ""
 	Tax         string `json:"tax"`      // "VAT 18%" / ""
-	Amount      string `json:"amount"`   // net of discount, before tax
+	// Amount is quantity × unit price, BEFORE discount and tax, so an amount column
+	// adds up to totals.subtotal; discounts are listed once, in totals.discount.
+	Amount         string `json:"amount"`
+	DiscountAmount string `json:"discount_amount"` // "20,000.00" or ""
+	Net            string `json:"net"`             // amount − discount, before tax
 }
 
 type RenderTax struct {
@@ -195,12 +199,15 @@ func (s *Service) buildJob(ctx context.Context, tx *gorm.DB, rec *docRecord) (*r
 	}
 	for i, it := range rec.Items {
 		ri := RenderItem{Description: it.Description, Quantity: formatQty(it.Quantity),
-			UnitPrice: formatMoney(it.UnitPrice), Amount: formatMoney(outs[i].Net)}
-		switch it.DiscountType {
-		case "percent":
-			ri.Discount = it.DiscountValue.String() + "%"
-		case "amount":
-			ri.Discount = formatMoney(it.DiscountValue)
+			UnitPrice: formatMoney(it.UnitPrice), Amount: formatMoney(outs[i].Gross), Net: formatMoney(outs[i].Net)}
+		if !outs[i].Discount.IsZero() {
+			ri.DiscountAmount = formatMoney(outs[i].Discount)
+			switch it.DiscountType {
+			case "percent":
+				ri.Discount = fmt.Sprintf("%s%% (−%s)", it.DiscountValue.String(), ri.DiscountAmount)
+			case "amount":
+				ri.Discount = "−" + ri.DiscountAmount
+			}
 		}
 		if lines[i].HasTax {
 			ri.Tax = fmt.Sprintf("%s %s%%", lines[i].TaxName, lines[i].TaxRate.String())

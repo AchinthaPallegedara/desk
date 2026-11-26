@@ -435,7 +435,7 @@ function Editor({
               items={lines}
               kind={kind}
               settings={settings}
-              nets={totals.nets}
+              lines={totals.lines}
               allItems={items}
               setItem={setItem}
               remove={(k) => (setItems((s) => s.filter((i) => i.key !== k)), touch())}
@@ -459,7 +459,7 @@ function Editor({
                   items={addons}
                   kind={kind}
                   settings={settings}
-                  nets={totals.nets}
+                  lines={totals.lines}
                   allItems={items}
                   setItem={setItem}
                   remove={(k) => (setItems((s) => s.filter((i) => i.key !== k)), touch())}
@@ -555,7 +555,7 @@ function Editor({
 function ItemsEditor({
   items,
   allItems,
-  nets,
+  lines,
   kind,
   settings,
   setItem,
@@ -563,7 +563,7 @@ function ItemsEditor({
 }: {
   items: ItemState[];
   allItems: ItemState[];
-  nets: number[];
+  lines: { gross: number; disc: number }[];
   kind: Kind;
   settings: Settings;
   setItem: (k: string, p: Partial<ItemState>) => void;
@@ -574,7 +574,7 @@ function ItemsEditor({
   return (
     <div className="flex flex-col divide-y">
       {items.map((it) => {
-        const net = nets[allItems.findIndex((x) => x.key === it.key)] ?? 0;
+        const line = lines[allItems.findIndex((x) => x.key === it.key)] ?? { gross: 0, disc: 0 };
         return (
           <div key={it.key} className="grid grid-cols-12 gap-x-2 gap-y-3 py-4 first:pt-0 last:pb-0">
             <Textarea
@@ -646,7 +646,8 @@ function ItemsEditor({
               )}
               <span className="text-sm">
                 <span className="mr-2 text-xs text-muted-foreground">Amount</span>
-                <span className="font-medium tabular-nums">{money(net)}</span>
+                <span className="font-medium tabular-nums">{money(line.gross)}</span>
+                {line.disc > 0 && <span className="ml-1 text-xs text-muted-foreground tabular-nums">(−{money(line.disc)})</span>}
               </span>
             </div>
           </div>
@@ -911,7 +912,7 @@ function ReadOnlyItems({ items }: { items: DocumentView["items"] }) {
               {it.tax_name ? ` · ${it.tax_name} ${it.tax_rate}%` : " · no tax"}
             </p>
           </div>
-          <span className="font-medium tabular-nums">{money(it.net)}</span>
+          <span className="font-medium tabular-nums">{money(it.gross)}</span>
         </li>
       ))}
     </ul>

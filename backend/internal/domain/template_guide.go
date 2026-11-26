@@ -22,8 +22,11 @@ doc:        kind ("estimate"|"invoice"), title ("Estimate"|"Invoice"), subject (
 issuer:     name, legal_name, reg_no, tax_reg_no, address, phone, email,
             logo (file name to pass to image(), or "" when there is no logo)
 customer:   name, company, address, phone, email, tax_reg_no
-items:      array of { no (int), description, quantity, unit_price, discount ("10%" | "5,000.00" | ""),
-            tax ("VAT 18%" | ""), amount (after discount, before tax) }
+items:      array of { no (int), description, quantity, unit_price,
+            amount (quantity × unit price, BEFORE discount and tax — an amount column adds up to totals.subtotal),
+            discount ("10% (−20,000.00)" | "−5,000.00" | ""), discount_amount ("20,000.00" | ""),
+            net (amount − discount, before tax), tax ("VAT 18%" | "") }
+            Show the line discount as a note under the line; it is subtracted once, in totals.discount.
 addons:     same shape as items — optional extras NOT included in the total (estimates only; may be empty)
 addons_total: total of add-ons incl. tax ("" when none)
 totals:     subtotal, discount ("" when none), taxes: [{ name, rate, amount }], tax, total

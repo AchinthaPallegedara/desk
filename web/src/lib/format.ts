@@ -52,7 +52,8 @@ export function draftTotals(lines: DraftLine[]) {
     discount = 0,
     tax = 0,
     addons = 0;
-  const nets: number[] = [];
+  // Per line: gross = qty × price (the "amount" shown), disc = line discount.
+  const lines_: { gross: number; disc: number }[] = [];
   for (const l of lines) {
     const q = Number(l.quantity) || 0;
     const p = Number(l.unit_price) || 0;
@@ -63,7 +64,7 @@ export function draftTotals(lines: DraftLine[]) {
     d = Math.min(d, gross);
     const net = gross - d;
     const t = l.taxRate !== null ? r2((net * l.taxRate) / 100) : 0;
-    nets.push(net);
+    lines_.push({ gross, disc: d });
     if (l.is_addon) {
       addons += net + t;
       continue;
@@ -72,5 +73,5 @@ export function draftTotals(lines: DraftLine[]) {
     discount += d;
     tax += t;
   }
-  return { subtotal, discount, tax, total: subtotal - discount + tax, addons, nets };
+  return { subtotal, discount, tax, total: subtotal - discount + tax, addons, lines: lines_ };
 }
