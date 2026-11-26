@@ -1,0 +1,81 @@
+# Claviq Desk production stack. Lives at /opt/desk-prod/docker-compose.yml on the VPS;
+# the deploy workflow syncs this file there. Secrets come from /opt/desk-prod/.env
+# (mode 600, never in git) — see deploy/prod/.env.example.
+#
+# No host ports are published: Nginx Proxy Manager reaches `web` over the shared
+# nginx-proxy_default network, and `web` forwards /api, /mcp, /oauth and
+# /.well-known to `backend` on the private network.
+name: desk-prod
+
+x-backend-image: &backend-image ghcr.io/achinthapallegedara/claviq-desk-backend:${IMAGE_TAG:-prod}
+
+services:
+  db:
+    image: postgres:18-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: claviq_desk
+      POSTGRES_USER: claviq                      # schema owner: migrations, create-tenant
+      POSTGRES_PASSWORD: ${DB_OWNER_PASSWORD:?set DB_OWNER_PASSWORD in .env}
+      APP_DB_PASSWORD: ${DB_APP_PASSWORD:?set DB_APP_PASSWORD in .env}  # read by initdb
+    volumes:
+      - pg_data:/var/lib/postgresql
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U claviq -d claviq_desk"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [internal]
+
+  # One-shot: `docker compose run --rm -T migrate up` (also: status, down, version)
+  migrate:
+    image: *backend-image
+    profiles: [tools]
+    entrypoint: ["server", "migrate"]
+    command: ["up"]
+    environment:
+      MIGRATE_DATABASE_URL: postgres://claviq:${DB_OWNER_PASSWORD}@db:5432/claviq_desk?sslmode=disable
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [internal]
+
+  # One-shot admin: `docker compose run --rm admin create-tenant`
+  admin:
+    image: *backend-image
+    profiles: [tools]
+    environment:
+      MIGRATE_DATABASE_URL: postgres://claviq:${DB_OWNER_PASSWORD}@db:5432/claviq_desk?sslmode=disable
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [internal]
+
+  backend:
+    image: *backend-image
+    restart: always
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://claviq_app:${DB_APP_PASSWORD}@db:5432/claviq_desk?sslmode=disable
+    volumes:
+      - desk_data:/data          # font cache (+ files when STORAGE_DRIVER=local)
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [internal]
+    mem_limit: 768m
+
+  web:
+    image: ghcr.io/achinthapallegedara/claviq-desk-web:${IMAGE_TAG:-prod}
+    restart: always
+    depends_on: [backend]
+    networks: [internal, proxy]
+    mem_limit: 512m
+
+networks:
+  internal: {}
+  proxy:
+    external: true
+    name: nginx-proxy_default
+
+volumes:
+  pg_data:
+  desk_data:

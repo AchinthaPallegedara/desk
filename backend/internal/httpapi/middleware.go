@@ -220,17 +220,34 @@ func (a *api) limitHandler(name string, n int, per time.Duration, h http.Handler
 	})
 }
 
-// clientIP trusts X-Forwarded-For only from the local reverse proxy.
+// clientIP returns the real client address. Requests reach the service through
+// reverse proxies (Nginx Proxy Manager -> Next.js -> Go in Docker), all on
+// loopback or private networks. X-Forwarded-For is read right to left, skipping
+// those trusted hops, so a client cannot spoof its address by sending its own
+// header: the first untrusted entry is the one the outermost proxy appended.
 func clientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		host = r.RemoteAddr
 	}
-	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
-		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-			parts := strings.Split(xff, ",")
-			return strings.TrimSpace(parts[len(parts)-1])
+	if !trustedProxy(net.ParseIP(host)) {
+		return host
+	}
+	parts := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+	for i := len(parts) - 1; i >= 0; i-- {
+		p := strings.TrimSpace(parts[i])
+		ip := net.ParseIP(p)
+		if ip == nil {
+			continue
 		}
+		if !trustedProxy(ip) {
+			return p
+		}
+		host = p
 	}
 	return host
+}
+
+func trustedProxy(ip net.IP) bool {
+	return ip != nil && (ip.IsLoopback() || ip.IsPrivate())
 }
