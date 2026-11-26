@@ -1,0 +1,24 @@
+[Unit]
+Description=Claviq Desk backend (REST API + MCP + OAuth)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+User=claviq
+Group=claviq
+WorkingDirectory=/opt/claviq-desk/backend
+EnvironmentFile=/etc/claviq-desk/backend.env
+ExecStartPre=/opt/claviq-desk/backend/server migrate up
+ExecStart=/opt/claviq-desk/backend/server
+Restart=on-failure
+RestartSec=3
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/claviq-desk
+MemoryMax=768M
+
+[Install]
+WantedBy=multi-user.target

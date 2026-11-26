@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Claviq Desk backup daily
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 Asia/Colombo
+Persistent=true
+RandomizedDelaySec=10m
+
+[Install]
+WantedBy=timers.target

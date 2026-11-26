@@ -1,0 +1,8 @@
+[Unit]
+Description=Claviq Desk daily backup (Postgres + R2 -> off-VPS)
+
+[Service]
+Type=oneshot
+User=claviq
+EnvironmentFile=/etc/claviq-desk/backup.env
+ExecStart=/opt/claviq-desk/deploy/backup/backup.sh

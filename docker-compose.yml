@@ -1,0 +1,21 @@
+# Local development services. Production runs Postgres directly on the VPS.
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: claviq_desk
+      POSTGRES_USER: claviq          # schema owner, used only for migrations
+      POSTGRES_PASSWORD: claviq
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./deploy/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U claviq -d claviq_desk"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
