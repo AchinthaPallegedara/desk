@@ -1,7 +1,11 @@
 package domain_test
 
 import (
+	"bytes"
 	"context"
+	"image"
+	"image/color"
+	"image/png"
 	"errors"
 	"io"
 	"log/slog"
@@ -306,5 +310,43 @@ func TestTemplateValidation(t *testing.T) {
 	v3, err := e.svc.RestoreTemplateVersion(ctx, a, v.ID, vers[len(vers)-1].ID)
 	if err != nil || v3.CurrentVersion != 3 {
 		t.Fatalf("restore: %v", err)
+	}
+}
+
+func TestTemplatePreviewUsesRealBusinessAndLogo(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	a := e.tenant(t)
+
+	// A template that only works when the real logo and business name are passed in.
+	src := `#let data = json("data.json")
+#assert(data.issuer.name == "Test Co", message: "issuer is not the real business: " + data.issuer.name)
+#assert(data.issuer.logo != "", message: "logo missing")
+#image(data.issuer.logo, height: 1cm)
+#data.issuer.name`
+	name := "Logo check"
+	if _, err := e.svc.CreateTemplate(ctx, a, domain.TemplateInput{Name: &name, DocType: "estimate", Source: &src}); err == nil {
+		t.Fatal("expected failure before a logo is uploaded")
+	}
+
+	var buf bytes.Buffer
+	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	img.Set(1, 1, color.RGBA{240, 90, 40, 255})
+	_ = png.Encode(&buf, img)
+	if err := e.svc.UploadLogo(ctx, a, buf.Bytes()); err != nil {
+		t.Fatal(err)
+	}
+
+	tv, err := e.svc.CreateTemplate(ctx, a, domain.TemplateInput{Name: &name, DocType: "estimate", Source: &src})
+	if err != nil {
+		t.Fatalf("template using the real logo should compile: %v", err)
+	}
+	links, err := e.svc.TemplatePreviewLinks(ctx, a, tv.ID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := e.svc.PreviewInfo(ctx, links.PreviewURL[len("http://localhost:3000/p/"):])
+	if err != nil || info.Pages != 1 {
+		t.Fatalf("preview: %+v %v", info, err)
 	}
 }

@@ -95,11 +95,12 @@ func (s *Service) GetTemplate(ctx context.Context, a Actor, id uuid.UUID) (*Temp
 // validateTemplate compiles the source against sample data so broken templates
 // are rejected with Typst's error message (which the AI can act on).
 func (s *Service) validateTemplate(ctx context.Context, tx *gorm.DB, tenantID uuid.UUID, docType, src string) error {
-	dirs, err := s.fontDirs(ctx, tx, tenantID)
+	job, err := s.sampleJob(ctx, tx, tenantID, docType, src)
 	if err != nil {
 		return err
 	}
-	_, err = s.renderer.Render(ctx, render.Job{Source: src, Data: SampleData(docType), FontDirs: dirs, Format: render.PDF})
+	job.Format = render.PDF
+	_, err = s.renderer.Render(ctx, *job)
 	var ce *render.CompileError
 	if errors.As(err, &ce) {
 		return invalid("template does not compile: %s", ce.Message)

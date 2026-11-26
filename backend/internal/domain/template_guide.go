@@ -37,7 +37,9 @@ bank:       { account_name, account_number, bank, branch, swift } or none
 - Only main.typ, data.json and the logo file are readable. No other files.
 - No packages: #import "@preview/..." is rejected. Write layouts inline.
 - Rendering must finish within 15 seconds.
-- Every save is compiled against sample data first; compile errors are returned verbatim.
+- Every save is compiled first; compile errors are returned verbatim. Previews and that check use
+  sample customer/items/milestones but the business's REAL issuer details, logo and bank account.
+- Branding: use image(data.issuer.logo) when issuer.logo != "", otherwise show issuer.name.
 
 ## Fonts
 - Call list_fonts first. Poppins is always available. Use add_google_font for others.

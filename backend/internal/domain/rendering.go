@@ -364,11 +364,11 @@ func (s *Service) resolvePreview(ctx context.Context, token string, wantPDF bool
 			if err := tx.First(&t, "id = ?", tv.TemplateID).Error; err != nil {
 				return err
 			}
-			dirs, err := s.fontDirs(ctx, tx, c.T)
+			var err error
+			job, err = s.sampleJob(ctx, tx, c.T, tv.DocType, tv.TypstSource)
 			if err != nil {
 				return err
 			}
-			job = &render.Job{Source: tv.TypstSource, Data: SampleData(tv.DocType), FontDirs: dirs}
 			info.Kind, info.Title, info.Status = "template", t.Name, "sample"
 			info.Number = fmt.Sprintf("v%d", tv.Version)
 		default:
@@ -511,4 +511,43 @@ func (c *previewCache) put(k string, v *rendered) {
 		c.ll.Remove(last)
 		delete(c.items, last.Value.(*cacheEntry).key)
 	}
+}
+
+// sampleJob renders a template with sample customer, items and milestones but the
+// business's REAL issuer details: name, logo, registration/VAT numbers, address,
+// contact details, default bank account and currency. Template previews and the
+// compile check on save therefore show (and exercise) the owner's own branding.
+func (s *Service) sampleJob(ctx context.Context, tx *gorm.DB, tenantID uuid.UUID, docType, src string) (*render.Job, error) {
+	data := SampleData(docType)
+	var t models.Tenant
+	if err := tx.First(&t, "id = ?", tenantID).Error; err != nil {
+		return nil, err
+	}
+	bank, err := resolveBank(tx, nil)
+	if err != nil {
+		return nil, err
+	}
+	is := issuerSnapshot(&t, bank).V
+	data.Issuer = RenderIssuer{Name: is.Name, LegalName: deref(is.LegalName), RegNo: deref(is.RegNo),
+		TaxRegNo: deref(is.TaxRegNo), Address: deref(is.Address), Phone: deref(is.Phone), Email: deref(is.Email)}
+	data.Doc.Currency = t.Currency
+	if is.Bank != nil {
+		data.Bank = &RenderBank{AccountName: is.Bank.AccountName, AccountNumber: is.Bank.AccountNumber,
+			Bank: is.Bank.Bank, Branch: deref(is.Bank.Branch), Swift: deref(is.Bank.Swift)}
+	}
+	job := &render.Job{Source: src}
+	if logo, ext, err := s.GetLogo(ctx, is.LogoPath); err == nil && logo != nil {
+		name := "logo." + ext
+		job.Assets = map[string][]byte{name: logo}
+		data.Issuer.Logo = name
+	} else if err != nil && !errors.Is(err, storage.ErrNotFound) {
+		s.log.Warn("logo unavailable", "error", err)
+	}
+	job.Data = data
+	dirs, err := s.fontDirs(ctx, tx, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	job.FontDirs = dirs
+	return job, nil
 }
