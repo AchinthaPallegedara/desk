@@ -249,5 +249,39 @@ func clientIP(r *http.Request) string {
 }
 
 func trustedProxy(ip net.IP) bool {
-	return ip != nil && (ip.IsLoopback() || ip.IsPrivate())
+	if ip == nil {
+		return false
+	}
+	if ip.IsLoopback() || ip.IsPrivate() {
+		return true
+	}
+	for _, n := range cloudflareNets {
+		if n.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
+
+// cloudflareNets are Cloudflare's proxy ranges (https://www.cloudflare.com/ips/).
+// desk.claviq.com is proxied by Cloudflare, so its edge servers are a trusted hop
+// in X-Forwarded-For, not the client.
+var cloudflareNets = func() []*net.IPNet {
+	cidrs := []string{
+		"173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22", "103.31.4.0/22",
+		"141.101.64.0/18", "108.162.192.0/18", "190.93.240.0/20", "188.114.96.0/20",
+		"197.234.240.0/22", "198.41.128.0/17", "162.158.0.0/15", "104.16.0.0/13",
+		"104.24.0.0/14", "172.64.0.0/13", "131.0.72.0/22",
+		"2400:cb00::/32", "2606:4700::/32", "2803:f800::/32", "2405:b500::/32",
+		"2405:8100::/32", "2a06:98c0::/29", "2c0f:f248::/32",
+	}
+	out := make([]*net.IPNet, 0, len(cidrs))
+	for _, c := range cidrs {
+		_, n, err := net.ParseCIDR(c)
+		if err != nil {
+			panic(err)
+		}
+		out = append(out, n)
+	}
+	return out
+}()
